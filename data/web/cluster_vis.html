@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+</head>
+<body style="margin:0px;">
+	<div id="arrows">
+		<div id="info-cards"> 
+			<div id="card-nav">
+				<span id="close-cards" style="float:left; font-size:22px; color:rgba(128,0,0,1); padding: 3px; cursor:pointer">✖</span>
+				<span id="flip-right" style="float:right; font-size:25px; cursor:pointer">▶</span>
+				<span id="flip-left"  style="float:right; font-size:25px; cursor:pointer">◀</span>
+			</div>
+			<div class="card"> 
+				<div id="top" class="face top"> 
+					Current
+				</div>
+				<div id="bottom" class="face bottom">
+					Next
+				</div>
+			</div>
+		</div> 
+	</div>
+	<style>
+
+		svg#clusters
+		{
+			position:			absolute;
+			right: 				0px;
+			z-index:			10;
+		}
+
+		#arrows
+		{
+			position: 			absolute;
+			width: 				100%;
+			height: 			100%;
+			background: 		rgba(255,255,255,.8);
+			z-index: 			100;
+			visibility: 		hidden;
+		}
+
+		svg#arrow
+		{
+			/*width: 					100%;*/
+			/*height:					100%;*/
+		}
+
+		#info-cards
+		{
+			-webkit-perspective: 800;
+			width:		400px;
+			min-height:	450px;
+			position:	absolute;
+			right:		50px;
+			top:		50px;
+			z-index:	1000;
+		}
+		#info-cards .card 
+		{
+			border-top-left-radius:				5px;
+			border-top-right-radius:			5px;
+			/*background:						rgba(0,0,0,.3);*/
+		}
+
+		#info-cards .card.flipped-right { -webkit-transform: rotatey(-180deg); }
+		#info-cards .card.flipped-left  { -webkit-transform: rotatey(+180deg); }
+
+		#info-cards .card
+		{
+			width:							100%;
+			height:							100%;
+			-webkit-transform-style:		preserve-3d;
+			-webkit-backface-visibility:	hidden;
+			-webkit-transition:				0.5s;
+		}
+
+		#info-cards .card .face
+		{
+			width:							100%;
+			height:							100%;
+			position:						absolute;
+			-webkit-backface-visibility:	hidden;
+			-webkit-transform-style: 		preserve-3d;
+			-webkit-transform:				translate3d(0,0,0);
+			-webkit-perspective:			1000;
+			z-index:						1002;
+			text-align:						center;
+		}
+
+		#info-cards .card .top
+		{
+			position:						absolute;
+			z-index:						1001;
+			color:							black;
+			cursor:							pointer;
+		}
+
+		#info-cards .card .bottom
+		{
+			-webkit-transform:				rotatey(-180deg);
+			color:							black;
+			cursor:							pointer;
+		}
+		#info-cards #top, #info-cards #bottom {}
+
+		#info-cards table
+		{
+			border-radius: 		5px;
+			border: 			1px solid #888;
+			background: 		rgba(255,255,255,.8);
+			margin:				10px;
+		}
+		#info-cards table tr > td:first-child
+		{
+			text-align:			right;
+			padding-right:		5px;
+		}
+		#info-cards table tr > td:last-child
+		{
+			text-align:			left;
+			padding-left:		5px;
+		}
+
+		#card-nav
+		{
+			width:				100%;
+			background:			rgba(0,0,0,.1);
+			font-family:		Comic Sans MS;
+			height:				37px;
+		}
+}
+
+	</style>
+
+	<script src="http://d3js.org/d3.v3.min.js"></script>
+	<script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+	<script>
+
+		var w = window,
+			d = document,
+			e = d.documentElement,
+			g = d.getElementsByTagName('body')[0],
+			x = w.innerWidth || e.clientWidth || g.clientWidth,
+			y = w.innerHeight|| e.clientHeight|| g.clientHeight;
+
+		var width = x-450,
+			height = y-30;
+			padding = 3.5, // separation between same-color nodes
+			clusterPadding = 8, // separation between different-color nodes
+			maxRadius = 12;
+
+		var n = 200, // total number of nodes
+		    m = 10; // number of distinct clusters
+
+
+		// A list of arrow BGC ids for convenience
+		var selected_cluster;
+		var selected_cluster_arrow_ids;
+		var selected_bgc_id;
+
+		// Info Card functions
+		// Sticky info cards on scroll
+		$(window).scroll(function()
+		{
+			$('#info-cards').css({position: 'fixed', top: '50px', right: '50px'});
+			//$('#info-cards').css('display', 'block');
+		});
+
+		// Click left function 
+		$("#flip-left").click(function(){ flip_card("left"); return false; });
+		// Click right function
+		$("#flip-right").click(function(){ flip_card("right"); return false; });
+		// Click close function 
+		$("#close-cards").click(function()
+		{
+			$('#info-cards').hide();
+			return false;
+		});
+		// Function to perform actual flipping
+		var flip_card = function(direction)
+		{
+			var cls = "";
+			var other = "";
+			if (direction=="right") {cls="flipped-right"; other="flipped-left"}
+			else if (direction=="left") {cls="flipped-left"; other="flipped-right"}
+			else {return;}
+
+			var ids = selected_cluster_arrow_ids;
+			var id  = selected_bgc_id;
+			var last_id = id;
+			var idx = ids.indexOf(id);
+			// Get the new ID's index
+			if(direction=="right")
+			{
+				if (idx+1 == ids.length)
+					idx = 0;
+				else
+					idx = idx+1;
+				id = ids[idx];
+			}
+			else
+			{
+				if (idx-1 < 0)
+					idx = ids.length-1;
+				else
+					idx = idx-1;
+				id = ids[idx];
+			}
+
+			var card = $('#info-cards').find('.card');
+			if(card.hasClass(cls))
+			{
+				new_card = card.clone(true);
+				new_card.removeClass(cls);
+				card.before(new_card);
+				card.remove();
+				load_card('top',last_id, false);
+				load_card('bottom', id);
+				window.setTimeout(function(){$('#info-cards').find('.card').addClass(cls);},30);
+			}
+			else if(card.hasClass(other))
+			{
+				new_card = card.clone(true);
+				new_card.removeClass(other);
+				card.before(new_card);
+				card.remove();
+				load_card('top',last_id, false);
+				load_card('bottom', id);
+				window.setTimeout(function(){$('#info-cards').find('.card').addClass(cls);},30);
+			}
+			else
+				load_card('top',last_id, false);
+				load_card('bottom', id);
+				card.addClass(cls);
+			return false;
+		}
+
+		// Function to highlight corresponding BGC in arrower diagram 
+		var highlight_bgc = function(id, scroll_to)
+		{
+			var scroll_to = typeof scroll_to !== 'undefined' ? scroll_to : true;
+			var ctx = document.getElementById("arrow"),
+			textElm = ctx.getElementById("arrow_"+id),
+			SVGRect = textElm.getBBox();
+
+			try{ctx.getElementById("old-highlight").remove();} catch(e){}
+
+			var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+			rect.setAttribute("x", SVGRect.x-5);
+			rect.setAttribute("y", SVGRect.y-5);
+			rect.setAttribute("width", SVGRect.width+10);
+			rect.setAttribute("height", SVGRect.height+10);
+			rect.setAttribute("fill", "rgba(255,255,0,.3)");
+			rect.setAttribute("id", "old-highlight");
+			ctx.insertBefore(rect, textElm);
+
+			//Scroll to location of SupportDiv on load
+			if(scroll_to)
+				$('html, body').animate({scrollTop: $('#old-highlight').offset().top}, 500).clearQueue();
+		}
+		// Function to load into into a card
+		// Takes the card face and the index of the arrow_id (bgc_id) to load corresponding info for 
+		var load_card = function(face, id, highlight)
+		{
+			var highlight = typeof highlight !== 'undefined' ? highlight : true;
+			if (id==-1){$('#'+face).html(""); return}
+			// Get the BGC with for the given id
+			var bgc = selected_cluster.filter(function(d,i){if(d.attribs.bgc_id==id){return d;}})[0];
+			// Define a title case function for nice display
+			toTitleCase = function(str){return str.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});}
+			// Get the list of BGC attributes
+			var attribs = bgc['attribs'];
+			var txt = "<table class='sortable' id='sortable-gene-table'><colgroup><col width='150'><col width='300'></colgroup><tbody>";
+			//var taxonomy = attribs['_domain']+"/"+attribs['_phylum']+"/"+attribs['_class']+"/"+attribs['_order']+"/"+attribs['_family']+"/"+attribs['_genus']+"/"+attribs['_species'];
+			//attribs['taxonomy'] = taxonomy;
+			// Append to the table for each attribute/value pair with exceptions
+			var taxons = ['_domain','_phylum','_class','_order','_family','_genus','_species']
+			var lengths = ['genes','domains']
+			var shows = ['bgc_id', 'kind', 'start_locus_tag', 'end_locus_tag', 'genome_name', 'genome_size', 'img_genome_id','sequencing_center', 'status']
+			for (var taxon in taxons)
+			{
+				taxon = taxons[taxon]
+				txt = txt + "<tr><td>" + toTitleCase(taxon.slice(1)) + "</td><td>" +  String(attribs[taxon]) + "</td></tr>";
+			}
+			for (var len in lengths)
+			{
+				len = lengths[len]
+					txt = txt + "<tr><td>" + String("# of " + len.charAt(0).toUpperCase() + len.slice(1)) + "</td><td>" +  String(attribs[len].length) + "</td></tr>";
+			}
+			for (var show in shows)
+			{
+				show = shows[show]
+				txt = txt + "<tr><td>" + toTitleCase(show.replace(/_/g," ")) + "</td><td>" +  String(attribs[show]) + "</td></tr>";
+			}
+			txt = txt + "</tbody></table>"
+			
+			// Update the card
+			$('#'+face).html(txt);
+			// Highlight the corresponding arrow
+			if (highlight)
+				highlight_bgc(id);
+			selected_bgc_id = id;
+		}
+
+
+		d3.json("d3_cluster_data.json", function(json)
+		{
+
+			var bgcs = json['data']['nodes'];
+
+			// Define nodes (in this case there is 1 node per cluster, radius indicating the number of bgcs)
+			var nodes = new Array(d3.max(bgcs,function(d) {return d['cluster']}));
+			for(var i = 0; i < bgcs.length; i++)
+			{
+				var bgc = bgcs[i];
+				if(!nodes[bgc.cluster])
+				{
+					nodes[bgc.cluster] = [bgc];
+					nodes[bgc.cluster].radius = 1;
+				}
+				else
+					nodes[bgc.cluster].radius = nodes[bgc.cluster].push(bgc);
+			}
+			// Remove undefined (artifact of combining bgcs on backend)
+			for(var i = nodes.length; i--;)
+				if(!nodes[i])
+					nodes.splice(i,1);
+
+			// Assign a bgc node to cluster (shouldn't matter which)
+			var clusters = new Array(nodes.length);
+			for(var i = 0; i < nodes.length; i++)
+				clusters[i] = nodes[i][0];
+			
+
+			// Define colors
+			var color = d3.scale.category20().domain(d3.range(clusters.length));
+
+
+			// Use the pack layout to initialize node positions.
+			d3.layout.pack()
+				.sort(null)
+				.size([width, height])
+				.children(function(d) { return d.values; })
+				.value(function(d) { return d.radius * d.radius; })
+				.nodes({values: d3.nest()
+					.key(function(d) { return d.cluster; })
+					.entries(nodes)});
+
+			var force = d3.layout.force()
+				.nodes(nodes)
+				.size([width, height])
+				.gravity(.02)
+				.charge(0)
+				.on("tick", tick)
+				.start();
+
+			var svg = d3.select("body")
+				.append("svg")
+				.attr("id", "clusters")
+				.attr("width", width)
+				.attr("height", height);
+
+			var node = svg.selectAll("circle")
+				.data(nodes)
+			.enter().append("circle")
+				.attr('r',function(d){
+					d.radius = d.length+10;
+					//return d.length+10;
+					return 1;
+				})
+				.style("fill", function(d,i){ 
+					return color(i);
+				})
+				.call(force.drag);
+
+			node.transition()
+				.duration(550)
+				.delay(function(d, i) { return i * 2; })
+				.attrTween("r", function(d) {
+					var i = d3.interpolate(0, d.radius);
+					return function(t) { return d.radius = i(t); };
+				});
+
+			// Loads the corresponding SVG image into the arrow div for a given cluster circle node
+			var load_arrows_info = function(node)
+			{
+				// Get this nodes cluster
+				var cluster = node[0].cluster;
+				d3.xml("../arrows/Cluster_"+cluster+"_arrows.svg", "application/svg+xml", function(xml)
+				{
+					d3.select("#arrow").remove();
+					document.getElementById("arrows").appendChild(xml.documentElement);
+					d3.select("#arrows").style("visibility","visible");
+					// Set the selected cluster and arrow_div's array to those in the current SVG
+					selected_cluster = node; 
+					selected_cluster_arrow_ids = d3.selectAll("#arrow g[id*='arrow_']")[0].map(function(d,i){return parseInt(d.id.split("_")[1]);});
+					// And load the first arrow's BGC info onto the top (showing) card
+					load_card('top', selected_cluster_arrow_ids[0]);
+
+					// Attach a click to load card if clicked
+					$("#arrow g[id*='arrow_']").click(function()
+					{
+						var id =  parseInt(this.id.split("_")[1]);
+						var idx = selected_cluster_arrow_ids.indexOf(id)-1;
+						load_card('bottom', selected_cluster_arrow_ids[idx], false);
+						flip_card("right");
+						return false;
+					});
+				});
+
+
+			}
+			// Fires whenever a cluster circle is clicked on
+			node.on("click", function(d)
+			{
+				// Load the arrow SVG image into the arrow div
+				load_arrows_info(d);
+				// Show the info cards
+				$('#info-cards').show();
+				// Note: Setting of selected_cluster variables happens in load_arrows_xml()
+				//       since these functions depend on that data. Same with initial load_card() call.
+			});
+			// Clicking anywhere removes the info layer
+			d3.select("#arrows").on("click", function() 
+			{ 
+				// Hide the info cards
+				$('#info-cards').hide();
+				// Hide the arrows
+				d3.select("#arrows").style("visibility","hidden");
+				// Scroll to the top (where the cluster graph is)
+				$(document).scrollTop(0);
+				// Reset the selected_cluster variables
+				selected_cluster = null;
+				selected_cluster_arrow_ids = null;
+				selected_bgc_id = null;
+			});
+
+			function tick(e)
+			{
+				node
+					//.each(cluster(1 * e.alpha * e.alpha))
+					.each(collide(.25))
+					.attr("cx", function(d) { return d.x; })
+					.attr("cy", function(d) { return d.y; });
+			}
+
+			// Resolves collisions between d and all other circles.
+			function collide(alpha)
+			{
+				var quadtree = d3.geom.quadtree(nodes);
+				return function(d) {
+					var r = d.radius + maxRadius + Math.max(padding, clusterPadding),
+							nx1 = d.x - r,
+							nx2 = d.x + r,
+							ny1 = d.y - r,
+							ny2 = d.y + r;
+					quadtree.visit(function(quad, x1, y1, x2, y2) {
+						if (quad.point && (quad.point !== d)) {
+							var x = d.x - quad.point.x,
+									y = d.y - quad.point.y,
+									l = Math.sqrt(x * x + y * y),
+									r = d.radius + quad.point.radius + (d.cluster === quad.point.cluster ? padding : clusterPadding);
+							if (l < r) {
+								l = (l - r) / l * alpha;
+								d.x -= x *= l;
+								d.y -= y *= l;
+								quad.point.x += x;
+								quad.point.y += y;
+							}
+						}
+						return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+					});
+				};
+			}
+
+		});
+	</script>
+</body>
+</html>

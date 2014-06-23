@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<title>BGC Explorer</title>
+
+		<meta charset="utf-8">
+		<meta name="description" content="A description of the BGC Explorer Software Package (Fischbach Rotation Project 2014)">
+		<meta name="author" content="Clinton Cario">
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<link rel="stylesheet" href="css/reveal.min.css">
+		<link rel="stylesheet" href="css/theme/beige.css" id="theme">
+		<!-- For syntax highlighting -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- If the query includes 'print-pdf', use the PDF print sheet -->
+		<script>
+			document.write( '<link rel="stylesheet" href="css/print/' + ( window.location.search.match( /print-pdf/gi ) ? 'pdf' : 'paper' ) + '.css" type="text/css" media="print">' );
+		</script>
+
+		<!--[if lt IE 9]>
+		<script src="lib/js/html5shiv.js"></script>
+		<![endif]-->
+	</head>
+
+	<body>
+		<div class="reveal">
+			<div class="slides">
+
+				<section>
+					<h1>Biosynthetic Gene Cluster Explorer</h1>
+					<h3>A data management, clustering, and visualization system</h3>
+					<p>
+						<small>Created by <a href="http://www.clintcario.com">Clinton Cario</a> for <a href="http://www.fischbachgroup.org/">Fischbach Lab 2014</a></small>
+					</p>
+				</section>
+
+				<section>
+					<h2>Motivation</h2>
+					<ul>
+						<li>Biosynthetic Gene Clusters (BGCs) are proximally close genes in bacteria that produce related enzymes that make biologically active compounds.</li>
+						<li>When present in the microbiome, bacterial BGCs can affect human health
+							<ul><li>Eg. <i>Bacteroides fragillis</i> => polysaccharide A => host gut inflammation</li></ul>
+						</li>
+						<li>Understanding the individual taxa and structure of the microflora is far less important than understanding <i>what they do</i></li>
+						<li>This observation represents a fundamental shift to a more functional approach</li>
+					</ul><br/><br />
+					<h3 class="fragment">Can clustering microflora based on what they produce provide meaningful insight into functional families present in the microbiome?</h3>
+				</section>
+				<section>
+					<h2>Project Goals</h2>
+					<ul>
+						<li>Implement comparison measure of BGC similarity developed by Mohamed/Peter</li>
+						<li>Use this measure to cluster BGCs into families</li>
+						<li>Analyze Bacteroides oligosaccharides</li>
+						<li>Develop a way to visualize the results (arrower)</li>
+						<li>Characterize interesting or abundant families experimentally in the lab</li>
+					</ul>
+				</section>
+
+
+				<section>
+					<h2>Outline</h2>
+					<ol>
+						<li>Organizing Data</li>
+							<ul>
+								<li>Data Management</li>
+								<li>Creating the Database</li>
+								<li>Querying the Database</li>
+							</ul>
+						<li>Clustering BGCs</li>
+						<li>Visualization</li>
+						<li>The BGC Explorer API</li>
+					</ol>
+				</section>
+
+
+				<section>
+					<section>
+						<h1>Data Management</h1>
+					</section>
+					<section>
+						<h3>Given Files</h3>
+						<p>From IMG and Peter's Cluster Finder program</p>
+						<img src="img/file_types.png" />
+					</section>
+					<section>
+						<p> For perspective, ~ 1,000 files looks like this: </p>
+						<img src="img/files.png" />
+					</section>
+					<section>
+						<p> ~26K files looks like this: </p>
+						<img src="img/contig_and_cluster_files.png" />
+					</section>
+					<section>
+						<p> And ~60K looks like this: </p>
+						<img src="img/sequence_files.png" />
+					</section>
+					<section>
+						<h3> That's a lot to process on the fly!</h3>
+						<h3> More on this later, but first what do these files look like?</h3>
+					</section>
+					<section>
+						<h2>Sequence Files (58,284)</h2>
+						<p>eg. 2500069000_0.fasta</p>
+							<pre style="width:1050px;"><code class="cpp" style="background: none; color:black;">
+>IMG JGI Gene ID, Locus Tag/Protein name [organism]
+sequence
+							</code></pre>
+							<pre style="width:1050px;"><code data-trim class="cpp">
+>2500069248 Sugar phosphate permease [Lactobacillus reuteri 100-23]
+MENIGNFTVAKRWGSFLLLYLGYMILFADPNPPPPPVMNISLAYIGKDFHVGAAALGATASAFFLGYTLMQIPGGY
+LTDKFGSKLMVIISLFTWSLMTMVTGWAWSLAALIAIRFLFGIAEGPYPAAALKRISENYDKSEKSQATSALISSN
+YAGAAVAPLIIVPIIASNGWRNAFVWLGVGGFIILLAYYLVERPINSSQENGQARPKIEWKKIDHRVWAFVVIGLA
+LNIITKGLETWMPVYFLQEQGINLKNLAWLVPLPVISGGIAAFISGFVMVHLFKKHERWMISIASFLTLVFMFGLF
+KSTSLVGVVIFDVLIYFVKSLAFTGIFSFIAQILSEKTYGSSIGIVNFGGQLGGFVGPLLIGWIVQAAGSYSAAFF
+GLVISALVAVIACLFIKKA
+>2500069249 RNA polymerase sigma factor, sigma-70 family [Lactobacillus reuteri 100-23]
+MRFNKEDEEKYLKLINNTRRGSNKDFEELFRRYWPLVRRLWQRYNISGLELADWEQEARVVMLEVIRLYNNQGPRM
+FSCFFKECLTNRIRDIQRQTQAHKRIPAGCLYALSDDFAETLTDFSHHSPDDIIYCRQSLDRLLCHCSKFEREVLV
+YLHTGYSIAEIAGTLDCSKRSVQSALHRCHGKLLKVLMK
+                                                .
+                                                .
+                                                .
+							</pre></code>
+					</section>
+					<section>
+						<h2>Organism Annotation File</h2>
+						<p>AllOrgsTable.out (13,999 entries)</p>
+							<pre style="width:1500px; margin-left:-200px"><code class="cpp">
+taxon_oid  	 Domain  	 Status          	 Study Name                                                                            	 Genome Name / Sample Name                               	 Sequencing Center                  	 Phylum        	 Class           	 Order              	 Family              	 Genus              	 Species       	 IMG Genome ID 	 Genome Size 	 Gene Count
+644736411  	 Archaea 	 Finished        	 Thermococcus gammatolerans EJ3                                                        	 Thermococcus gammatolerans EJ3                          	 Genoscope                          	 Euryarchaeota 	 Thermococci     	 Thermococcales     	 Thermococcaceae     	 Thermococcus       	 gammatolerans 	 644736411     	 2045438     	 2206
+2524023100 	 Archaea 	 Draft           	 mesopelagic bacterioplankton                                                          	 Marine Group I thaumarchaeote sp. SCGC AAA288-N15       	 Marine Biological Laboratory       	 Crenarchaeota 	 unclassifie     	 unclassified       	 unclassified        	 unclassified       	 unclassified  	 2524023100    	 144418      	 307
+2264867066 	 Archaea 	 Permanent Draft 	 GEBA-MDM                                                                              	 Diapherotrites archaeon SCGC AAA011-K09 (DUSEL_001_199) 	 DOE Joint Genome Institute         	 unclassified  	 unclassified    	 unclassified       	 unclassified        	 unclassified       	 unclassified  	 2264867066    	 316537      	 384
+2515075008 	 Archaea 	 Permanent Draft 	 Continuation of the Genomic Encyclopedia of Bacteria and Archaea pilot project (GEBA) 	 Methanolobus tindarius DSM_2278                         	 DOE Joint Genome Institute         	 Euryarchaeota 	 Methanomicrobia 	 Methanosarcinales  	 Methanosarcinaceae  	 Methanolobus       	 tindarius     	 2515075008    	 3151883     	 3022
+2547132071 	 Archaea 	 Draft           	 Pan-genome of Methanobrevibacter smithii, in twins                                    	 Methanobrevibacter smithii TS96C                        	 Washington University in St. Louis 	 Euryarchaeota 	 Methanobacteria 	 Methanobacteriales 	 Methanobacteriaceae 	 Methanobrevibacter 	 smithii       	 2547132071    	 1818239     	 1863
+2512047039 	 Archaea 	 Finished        	 Pyrobaculum genomes                                                                   	 Pyrobaculum oguniense TE7, DSM_13380                    	 UC Santa Cruz                      	 Crenarchaeota 	 Thermoprotei    	 Thermoproteales    	 Thermoproteaceae    	 Pyrobaculum        	 oguniense     	 2512047039    	 2452920     	 3014
+2264867225 	 Archaea 	 Permanent Draft 	 GEBA-MDM                                                                              	 Aigarchaeota archaeon SCGC AAA471-I13 (GBS-N_001_17)    	 DOE Joint Genome Institute         	 unclassified  	 unclassified    	 unclassified       	 unclassified        	 unclassified       	 unclassified  	 2264867225    	 164795      	 208
+2524023132 	 Archaea 	 Permanent Draft 	 Dark ocean microbial single cell genomics                                             	 Euryarchaeota archaeon SCGC AB_633-I06                  	 DOE Joint Genome Institute         	 Euryarchaeota 	 unclassified    	 unclassified       	 unclassified        	 unclassified       	 unclassified  	 2524023132    	 316733      	 385
+2547132055 	 Archaea 	 Draft           	 Pan-genome of Methanobrevibacter smithii, in twins                                    	 Methanobrevibacter smithii TS146B                       	 Washington University in St. Louis 	 Euryarchaeota 	 Methanobacteria 	 Methanobacteriales 	 Methanobacteriaceae 	 Methanobrevibacter 	 smithii       	 2547132055    	 1794702     	 1864
+                                                                       .
+                                                                       .
+                                                                       .
+							</code></pre>
+					</section>
+					<section>
+						<h2>BGC Annotation File</h2>
+						<p>BGC_annotation_final.out (13,910 entries)</p>
+							<pre style="width:1300px; margin-left:-100px"><code class="cpp" style="background: none; color:black;">
+ Cluster ID 	 BGC Type    	 Organism name                                    	 ------- BGC Locus Tags -------
+(contig_idx) 	             	                                                  	 Start locus    	 End Locus Tag
+							</code></pre>
+							<pre style="width:1300px; margin-left:-100px"><code data-trim class="cpp">
+637000276_7  	 saccharide   	 Bacillus_thuringiensis_sv_konkukian_97-27        	 BT9727_0525    	 BT9727_0533
+646564655_2  	 RP           	 Nocardiopsis_dassonvillei_dassonvillei_DSM_43111 	 Ndas_0216      	 Ndas_0220
+646564655_7  	 saccharide   	 Nocardiopsis_dassonvillei_dassonvillei_DSM_43111 	 Ndas_0541      	 Ndas_0571
+646564655_6  	 PKS          	 Nocardiopsis_dassonvillei_dassonvillei_DSM_43111 	 Ndas_0488      	 Ndas_0498
+2511244474_8 	 NRPS         	 Corynebacterium_diphtheriae_INCA_402             	 CDB402_1065    	 CDB402_1094
+646564655_9  	 PKS          	 Nocardiopsis_dassonvillei_dassonvillei_DSM_43111 	 Ndas_0782      	 Ndas_0799
+2511244474_4 	 saccharide   	 Corynebacterium_diphtheriae_INCA_402             	 CDB402_0592    	 CDB402_0598
+2511244474_2 	 Siderophores 	 Corynebacterium_diphtheriae_INCA_402             	 CDB402_0489    	 CDB402_0500
+2511244474_1 	 saccharide   	 Corynebacterium_diphtheriae_INCA_402             	 CDB402_0269    	 CDB402_0284
+643010395_0  	 PKS          	 Capnocytophaga_sputigena_Capno,_ATCC_33612       	 CAPSP0001_2646 	 CAPSP0001_2657
+                                                          .
+                                                          .
+                                                          .
+							</code></pre>
+					</section>
+					<section>
+						<h2>Contig Files (26,496)</h2>
+						<p>eg. 651339065.out</p>
+							<pre style="width:1050px;"><code class="cpp" style="background: none; color:black;">
+   Contig      --------- Gene ----------    -- Domain --        Pfam           ClusterFinder 
+    ID            ID       Start     End    Start    End         ID             Probability
+ (IMG JGI)     (IMG JGI)    (nt)    (nt)     (aa)    (aa)      (ID/Q)              (p)
+							</code></pre>
+							<pre style="width:1050px;"><code class="cpp">
+ 651339065     651700990       1    2181     163     250       PF08447       0.000992893470247
+ 651339065     651700990       1    2181     290     378       PF08447       2.03138985722e-05
+ 651339065     651700990       1    2181     457     544       PF08447       3.81651944312e-06
+ 651339065     651700990       1    2181     568     671       PF13426       9.31045341573e-05
+ 651339065     651700991    2181    4334     419     528       PF08448       5.48237341596e-05
+ 651339065     651700991    2181    4334     538     604       PF13188       0.000251763613029
+ 651339065     651700992    4327    5436       9     121       PF00072       0.000327810569295
+ 651339065     651700992    4327    5436     232     302       PF13487       0.000603153681124
+ 651339065     651700993    5569    6315       1     234       PF00977       0.000765879584879
+ 651339065     651700994    6321    6944       7     207       PF00117       0.000345660870243
+                                               .
+                                               .
+                                               .
+							</pre></code>
+					</section>
+					<section>
+						<h2>Cluster Files (26,496)</h2>
+						<p>eg. 651339065.clusters.out</p>
+							<pre style="width:1225px; margin-left:-75px"><code class="cpp" style="background: none; color:black;">
+ --------- Contig ---------     --------- Gene ----------    -- Domain --        Pfam           ClusterFinder 
+ Cluster ID            ID           ID       Start     End    Start    End         ID             Probability
+(contig_idx)        (IMG JGI)     (IMG JGI)   (nt)     (nt)    (aa)    (aa)      (ID/Q)              (p)
+							</code></pre>
+							<pre style="width:1225px; margin-left:-75px"><code data-trim class="cpp">
+651339065_0       651339065     651701008    20947   21774     23     152       PF02311       0.228636994952
+651339065_0       651339065     651701008    20947   21774    192     270       PF12833       0.264759766456
+651339065_0       651339065     651701009    21831   22763      1     310       PF01207       0.302688385193
+651339065_0       651339065     651701010    22952   23329     46     115       PF04304       0.318807545006
+651339065_0       651339065     651701011    23462   24007     30     154       PF00156       0.325445149269
+651339065_0       651339065     651701012    24185   26662     20     179       PF13177       0.356840853132
+651339065_0       651339065     651701012    24185   26662    232     367       PF12169       0.389840348177
+651339065_0       651339065     651701012    24185   26662    674     820       PF12170       0.190219499291
+651339065_1       651339065     651701065    88082   88258      1      55       PF04957       0.499024658636
+651339065_1       651339065     651701066    88418   90067      1     547       PF11949       0.600873342604
+                                                          .
+                                                          .
+                                                          .
+							</pre></code>
+					</section>
+					<section>
+						<h2>Examining Data Quality and Character</h2>
+						<p>This determines success of workflow (GIGO principal)</p>
+						<br/>
+						<p style="margin-left:-180px">Observations of the data:</p>
+						<ul>
+							<li>Fairly well structured</li>
+							<li>Hierarchical</li>
+							<li>Redundant</li>
+							<li>High I/O (many files;slow)</li>
+							<li>Ideal for a database</li>
+						</ul>
+					</section>
+				</section>
+
+
+				<section>
+					<section>
+						<h1>Creating the Database</h1>
+					</section>
+					<section>
+						<h2>Step 1: Design</h2>
+						<img src="img/fischbach_rotation_erd.png" />
+					</section>
+					<section>
+						<h2>Step 2: Populating it</h2>
+						<br/>
+						<p style="margin-left:-400px">Uses peewee python module:</p>
+						<ul>
+							<li>Pick database type (SQLITE3)</li>
+							<li>Point peewee to it (data/BGCs.db)</li>
+							<li>Define tables (BGC_models.py):</li>
+								<pre style="width:800px"><code class="python">
+class Gene(BGCModel):
+gene_id          = PrimaryKeyField()
+img_gene_id      = CharField()
+contig           = ForeignKeyField(Contig, related_name="genes", null=True)
+bgc              = ForeignKeyField(BGC, related_name="genes", null=True)
+start            = IntegerField()
+end              = IntegerField()
+								</code></pre>
+						</ul>
+					</section>
+					<section>
+						<h2>Step 2: Populating it</h2>
+						<br/>
+						<p>BGC_databaser:</p>
+						<ul>
+							<li>Script to iterate over all files and insert into database</li>
+							<li>Takes 2 days</li>
+							<li>Has 'save' points if population is interrupted</li>
+							<li>Run like:</li>
+								<pre style="width:800px"><code class="c++">
+$ python BGC_databaser.py [reset]
+								</code></pre>
+						</ul>
+					</section>
+					<section>
+						<h2>Step 3: Optimizing it</h2>
+						<p>(Sharding, indexing, etc...)</p>
+						<img height=100 src="img/check.svg" />
+					</section>
+					<section>
+						<h2>Final Results</h2>
+						<pre style="width:1225px; margin-left:-75px"><code class="cpp" style="background: none; color:black;">
+ 13,997  organisms in database, 0 failures importing from flat files
+ 13,793  BGCs in database, 117 failures (orphaned)
+633,645  genes in database
+842,147  domains in database
+  5,238  unique pfam IDs
+    120  organisms with "Bacteroides" as genus
+  6,969  BGCs with "saccharide" as BGC type
+
+    437  BGCs w/ organism genus is Bacteroides AND BGC type is saccharide
+
+  9,173  Domains w/ genes, BGCs, and organisms AND BGC type is saccharide AND organism genus is Bacteroides
+  4,781  Same as above but w/ sequences
+  3,428  Same as above but w/ sequences and annotated (non Q) pfam IDs
+
+  1-301  Range in number of domains per pfam
+  						</code></pre>
+					</section>
+				</section>
+
+
+
+
+				<section>
+					<section>
+						<h1>Querying the Database</h1>
+					</section>
+					<section>
+						<h2>Querying the database</h2>
+						<p style="margin-left:-200px">A few different methods:</p>
+						<ul>
+							<li>SQLite3 command line
+								<ul><li> Using SQL language</li></ul>
+							</li>
+							<li>Programatically via python/peewee
+								<ul><li> Using python language (BGC Explorer)</li></ul>
+							</li>
+							<li>Using a GUI like:</li>
+								<img src="img/sqlite_inspector.png" height=400/>
+						</ul>
+					</section>
+					<section>
+						<h2>Selecting everything</h2>
+						<img src="img/select_all.png" height=200/>
+					</section>
+					<section>
+						<h2>Results</h2>
+						<img src="img/select_all_results.png" height=600/>
+					</section>
+					<section>
+						<h2>Selecting specific columns & using WHERE</h2>
+						<img src="img/select.png" height=200/>
+					</section>
+					<section>
+						<h2>Results</h2>
+						<img src="img/select_results.png" height=600/>
+					</section>
+					<section>
+						<h2>Joining</h2>
+						<img src="img/sql.jpg" height=600/>
+					</section>
+					<section>
+						<h2>Joining</h2>
+						<img src="img/select_star.png" height=400/>
+					</section>
+					<section>
+						<h2>Join Results</h2>
+						<img src="img/select_star_results.png" />
+					</section>
+					<section>
+						<h2>DISTINCT</h2>
+						<img src="img/select_D.png" height=400/>
+					</section>
+					<section>
+						<h2>DISTINCT results</h2>
+						<img src="img/select_D_results.png" />
+					</section>
+					<section>
+						<h2>COUNT DISTINCT</h2>
+						<img src="img/select_CD.png" height=400/>
+					</section>
+					<section>
+						<h2>COUNT DISTINCT results</h2>
+						<img src="img/select_CD_results.png" height=100/>
+					</section>
+				</section>
+
+
+				<section>
+					<section>
+						<h1>Clustering BGCs</h1>
+					</section>
+					<section> 
+						<h2>What do BGCs look like?</h2>
+						<p>Shown using a modified version of the arrower.py script (Peter)</p>
+						<img src="img/bgc_example.png" height=200/>
+					</section>
+					<section>
+						<h2>How conserved are they between taxa?</h2>
+					</section>
+					<section> 
+						<h2>Sometimes very.</h2>
+						<img src="img/easy_comparison.png" height=400 />
+					</section>
+					<section> 
+						<h2>Other times slightly less so. </h2>
+						<img src="img/slightly_harder.png" height=400 />
+					</section>
+					<section> 
+						<h2>Sometimes not in obvious ways.</h2>
+						<img src="img/slightly_harder2.png" height=200 />
+					</section>
+					<section> 
+						<h2>So, what is the best way to cluster/compare them?</h2>
+						<ul>
+							<li class="fragment" data-fragment-index="0">There is no best way</li>
+							<li class="fragment" data-fragment-index="1">Could use gene/protein sequence identity
+								<ul><li>Won't handle repeated/multiple (domain) sequences correctly</li></ul>
+							</li>
+							<li class="fragment" data-fragment-index="2">Could borrow diversity indices from ecology
+								<ul><li>Misses subtle sequence differences</li></ul>
+							</li>
+							<li class="fragment" data-fragment-index="3">How about a hybrid approach?
+								<ul><li>We are most interested in function, so will mostly consider domains</li></ul>
+							</li>
+						</ul>
+					</section>
+					<section>
+						<h2>Four Measures</h2>
+						<ol>
+							<li>Jaccard
+								<ul><li>Diversity</li></ul>
+							</li>
+							<li>S
+								<ul><li>The Lin metric</li></ul>
+							</li>
+							<li>DDS
+								<ul><li>Domain duplication</li></ul>
+							</li>
+							<li>Peter/Mohamed
+								<ul><li>Combination of above</li></ul>
+							</li>
+						</ol>
+					</section>
+					<section>
+						<h2>Jaccard</h2>
+						<p> Number of shared domains over unshared</p>
+						<img src="img/jaccard.png" />
+					</section>
+					<section>
+						<h2>S (Lin)</h2>
+						<p> Number of domains in the BGC with more domains</p>
+						<img src="img/lin.png" height=300/>
+					</section>
+					<section>
+						<h2>DDS</h2>
+						<p>Difference in domain number over total with distance penalty: </p>
+						<img src="img/DDS.png" /><br /><br />
+						<p>Distance Penalty</p>
+						<p>(Similarity Reward?)</p>
+						<img src="img/munkres_term.png" /><br/>
+						<ul>
+							<li>All vs. All pairwise similarity</li>
+							<li>Munkres</li>
+						</ul>
+					</section>
+					<section>
+						<h2>Pairwise vs. Munkres</h2>
+						<p>Pairwise (averaged distances)</p>
+						<img src="img/pairwise.png" /><br /><br />
+						<p>Munkres (summed distances)</p>
+						<p>Lines represent best matches</p>
+						<img src="img/munkres.png" /><br/>
+					</section>
+					<section>
+						<h2>Peter/Mohamed Metric</h2>
+						<p>Weighted Combination of Jaccard and DDS/S</p>
+						<p>Empirically Determined</p>
+						<img src="img/peter_metric.png" height=100/><br /><br />
+					</section>
+					<section>
+						<h2>Computing Pairwise BGC Similarity</h2>
+						<ul>
+							<li>Now we have a metric, use it to compare all BGCs of interest</li>
+							<li>Can be done after BGC database filters are set</li>
+							<li>Values are stored in the database for faster retrieval later</li>
+						</ul>
+						<br /><br/>
+						<img src="img/bgc_pairwise.png" /><br /><br />
+					</section>
+				</section>
+
+
+				<section>
+					<section>
+						<h1>Visualization</h1>
+					</section>
+					<section> 
+						<h2>Networks</h2>
+						<p>Networks are often used to represent entity relationships</p>
+						<img src="img/network.png" height=400/>
+					</section>
+					<section>
+						<h2>Networks</h2>
+						<p>Node edges can have weights (in this case indicating similarity)</p>
+						<img src="img/network_weights.png" height=400/>
+					</section>
+					<section>
+						<h2>Networks</h2> 
+						<p>Edges can pruned based on edge weights to cluster</p>
+						<img src="img/network_filtering.png" />
+					</section>
+					<section>
+						<h2>MCL</h2>
+						<ul>
+							<li>A method to prune edges automatically</li>
+							<li>Takes a stochastic approach</li>
+							<li>Given a node, algorithm takes edge with probability proportional to weight</li>
+							<li>More connected clusters have more edges, which increases probability of selection</li>
+							<li>After a set number of iterations, edges with low traversal are removed</li>
+							<li>This process can be repeated</li>
+							<li>'Inflation' (I) parameter is used to adjust sensitivity</li>
+						</ul>
+					</section>
+					<section>
+						<h2>Bubbles</h2> 
+						<ul>
+							<li>After MCL, remaining clusters can be grouped into circles</li>
+							<li>Size of circle represents number of BGCs per group</li>
+						</ul>
+						<img src="img/cluster_bubbles.png" />
+					</section>
+					<section>
+						<h2>Implementation</h2> 
+						<p>Both networks and bubble clusters were implemented as ways to explore BGC groupings</p>
+					</section>
+				</section>
+
+
+				<section>
+					<section>
+						<h1>The BGC Explorer API</h1>
+					</section>
+					<section>
+						<h2> An example usage </h2>
+						<p>6 simple steps</p>
+						<p>(starred only need to be done the first time)</p>
+						<ol>
+							<li>Import the library</li>
+							<li>Initialize Database Filter</li>
+							<li>* Compute BGC comparisons</li>
+							<li>* Add additional NCBI information</li>
+							<li>Cluster</li>
+							<li>Visualize</li>
+						</ol>
+							<pre ><code class="python">
+import BGCExplorer
+NRPS = BGCs(filters={'Kind':"NRPS"})
+NRPS.compare_bgcs()
+NRPS.augment()
+NRPS.cluster()
+NRPS.visualize_clusters()
+-- or --
+NRPS.visualize_network()
+							</code></pre>
+					</section>
+					<section> 
+						<h2>Database Filters</h2>
+						<pre style="width:1225px; margin-left:-75px"><code class="cpp" style="background: none; color:black;">
+ORGANISM
+========
+KEY                     Type
+domain                  string or list
+phylum                  string or list
+class                   string or list
+order                   string or list
+family                  string or list
+genus                   string or list
+species                 string or list
+taxon id                int, string, or list 
+status                  string or list in ["Finished", "Draft", "Permenant Draft"]
+sequencing center       string or list
+img genome id           int, string, or list 
+genome name             string or list
+genome name key         string or list
+genome size             int, string, or list 
+gene count              int, string, or list 
+
+CONTIG
+======
+contig                  int, string, or list 
+
+BGC
+===
+cluster                 string or list
+cluster idx             int, string, or list
+kind                    string or list
+start locus tag         string or list
+end locus tag           string or list
+
+GENE
+====
+img gene id             int, string, or list
+start                   int, string, or list
+end                     int, string, or list
+
+DOMAIN
+======
+pfam id                 string or list
+sequence                string or list
+cluster finder prob     float, string, or list
+
+SEQUENCE
+========
+locus tag                string or list
+sequence                 string or list
+						</code></pre>
+					</section>
+					<section>
+						<h3>Cluster Options</h3>
+						<pre style="width:1275px; margin-left:-100px"><code class="python">
+cluster(self, measure="similarity", cutoff=0.35, use_mcl=True, I=3.5, prefilter=True, keep_singletons=False, verbose=True)
+						</code></pre><br/><br/>
+						<h3>Visualization Options</h3>
+						<pre style="width:1275px; margin-left:-100px"><code class="python">
+visualize_clusters(self, verbose=None, show_domains=True, color_key='pfams', group_nodes=True)
+						</code></pre>
+					</section>
+				</section>
+
+				<section>
+					<h1>Live Demo</h1>
+				</section>
+
+				<section>
+					<h1>Thanks</h1>
+					<h1>Questions?</h1>
+				</section>
+			</div>
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.min.js"></script>
+		<script>
+			// Full list of configuration options available here:
+			// https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				controls: true,
+				progress: true,
+				history: true,
+				center: true,
+				margin: 0.01,
+				width: 1080,
+				height: 900,
+
+				theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+				transition: Reveal.getQueryHash().transition || 'linear', // default/cube/page/concave/zoom/linear/fade/none
+
+				// Parallax scrolling
+				// parallaxBackgroundImage: 'https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg',
+				// parallaxBackgroundSize: '2100px 900px',
+
+				// Optional libraries used to extend on reveal.js
+				dependencies: [
+					{ src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+					{ src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+					{ src: 'plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+					{ src: 'plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+				]
+			});
+		</script>
+	</body>
+</html>

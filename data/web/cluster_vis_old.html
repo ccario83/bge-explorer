@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html style = "height:100%";>
+<head>
+	<meta charset="utf-8">
+</head>
+<body style = "height: 100%; margin:0px;">
+	<div id="tooltip"></div>
+	<style>
+		#tooltip
+		{
+			position: 			absolute;
+			left:				0%;
+			top:				0%;
+			z-index: 			20;
+			padding: 			6px;
+			font-family: 		sans-serif;
+			font-size: 			11px;
+			visibility: 		hidden;
+			/*width:			200px;*/
+			/*height: 			12%;
+			overflow: scroll;*/
+		}
+		#tooltip table
+		{
+			border-radius: 	5px;
+			border: 			1px solid #888;
+			background: 		rgba(255,255,255,.8);
+		}
+
+		svg#clusters
+		{
+			position:				absolute;
+			right: 					0px;
+			z-index:				10;
+		}
+
+		svg#arrow
+		{
+			position:				absolute;
+			left: 					0%;
+			top:					0%;
+			z-index:				0;
+			overflow:				scroll;
+		}
+	</style>
+
+	<script src="http://d3js.org/d3.v3.min.js"></script>
+	<script>
+
+		var w = window,
+				d = document,
+				e = d.documentElement,
+				g = d.getElementsByTagName('body')[0],
+				x = w.innerWidth || e.clientWidth || g.clientWidth,
+				y = w.innerHeight|| e.clientHeight|| g.clientHeight;
+
+		var width = x-450,
+				height = y-30;
+				padding = 3.5, // separation between same-color nodes
+				clusterPadding = 8, // separation between different-color nodes
+				maxRadius = 12;
+
+		// The largest node for each cluster.
+		//var clusters = new Array(m);
+		//
+		//var nodes = d3.range(n).map(function() {
+		//	var i = Math.floor(Math.random() * m),
+		//			r = Math.sqrt((i + 1) / m * -Math.log(Math.random())) * maxRadius,
+		//			d = {cluster: i, radius: r};
+		//	if (!clusters[i] || (r > clusters[i].radius)) clusters[i] = d;
+		//	return d;
+		//});
+
+
+		d3.json("d3_cluster_data.json", function(json)
+		{
+			// Each node
+			var nodes = json['data']['nodes'];
+			// The largest node for each cluster.
+			var clusters = new Array(d3.max(nodes,function(d) {return d['cluster']}));
+
+			for(var i = 0; i < nodes.length; i++)
+			{
+				var c_no = nodes[i]['cluster'];
+				if (!clusters[c_no] || (nodes[i]['radius'] > clusters[c_no].radius)) clusters[c_no] = nodes[i];
+			}
+
+			var color = d3.scale.category20().domain(d3.range(nodes.length));
+
+			d3.layout.pack()
+					.sort(null)
+					.size([width, height])
+					.children(function(d) { return d.values; })
+					.value(function(d) { return d.radius * d.radius; })
+					.nodes({values: d3.nest()
+						.key(function(d) { return d.cluster; })
+						.entries(nodes)});
+
+			var force = d3.layout.force()
+					.nodes(nodes)
+					.size([width, height])
+					.gravity(.02)
+					.charge(0)
+					.on("tick", tick)
+					.start();
+
+			var svg = d3.select("body").append("svg")
+					.attr("id", "clusters")
+					.attr("width", width)
+					.attr("height", height);
+
+
+			var node = svg.selectAll("circle")
+					.data(nodes)
+				.enter().append("circle")
+					.attr('r',2)
+					.style("fill", function(d) { return color(d.cluster); })
+					.call(force.drag);
+
+			node.transition()
+					.duration(550)
+					.delay(function(d, i) { return i * 2; })
+					.attrTween("r", function(d) {
+						var i = d3.interpolate(0, 8); // NOTE this was d.radius 
+						return function(t) { return d.radius = i(t); };
+					});
+
+			// Get a tooltip handle to load things into
+			var tooltip = d3.select("#tooltip");
+			// Add a tooltip
+			var fill_tooltip = function(tooltip, node)
+			{	
+				var txt = "<table class='sortable' id='sortable-gene-table'><colgroup><col width='150'><col width='300'></colgroup><tbody>";
+				// Append to the table for each attribute/value pair
+				keys = Object.keys(node['attribs']).sort()
+				for (var key_idx in keys)
+				{
+					key = keys[key_idx];
+					//if (key == 'domains') node['attribs']['domains'] = node['attribs']['domains'].length;
+					if (key !='domains')
+						txt = txt + "<tr><td>" + String(key) + "</td><td>" +  String(node['attribs'][key]) + "</td></tr>";
+				}
+				txt = txt + "</tbody></table>"
+				tooltip.html(txt);
+			};
+			node.on("mouseover", function(d){ fill_tooltip(tooltip, d); return tooltip.style("visibility", "visible");})
+					.on("mousemove", function(){return tooltip.style("top", (event.pageY-10)+"px").style("left",(event.pageX+10)+"px");})
+					.on("mouseout", function(){return tooltip.style("visibility", "hidden");});
+
+
+			// Add click functionality to load Arrower images
+			var load_arrow_xml = function(tooltip, node)
+			{
+				// Get this nodes cluster
+				var cluster = node['cluster'];
+				//tooltip.style("visibility", "hidden");
+				d3.xml("../arrows/Cluster_"+cluster+"_arrows.svg", "application/svg+xml", function(xml)
+				{
+					d3.select("#arrow").remove();
+					document.body.appendChild(xml.documentElement);
+				});
+			}
+			node.on("click", function(d){ load_arrow_xml(tooltip, d); });
+
+
+			function tick(e)
+			{
+				node
+						.each(cluster(1 * e.alpha * e.alpha))
+						.each(collide(.25))
+						.attr("cx", function(d) { return d.x; })
+						.attr("cy", function(d) { return d.y; });
+			}
+
+
+			// Move d to be adjacent to the cluster node.
+			function cluster(alpha)
+			{
+				return function(d) {
+					var cluster = clusters[d.cluster];
+					if (cluster === d) return;
+					var x = d.x - cluster.x,
+							y = d.y - cluster.y,
+							l = Math.sqrt(x * x + y * y),
+							r = d.radius + cluster.radius;
+					if (l != r) {
+						l = (l - r) / l * alpha;
+						d.x -= x *= l;
+						d.y -= y *= l;
+						cluster.x += x;
+						cluster.y += y;
+					}
+				};
+			}
+
+
+			// Resolves collisions between d and all other circles.
+			function collide(alpha)
+			{
+				var quadtree = d3.geom.quadtree(nodes);
+				return function(d) {
+					var r = d.radius + maxRadius + Math.max(padding, clusterPadding),
+							nx1 = d.x - r,
+							nx2 = d.x + r,
+							ny1 = d.y - r,
+							ny2 = d.y + r;
+					quadtree.visit(function(quad, x1, y1, x2, y2) {
+						if (quad.point && (quad.point !== d)) {
+							var x = d.x - quad.point.x,
+									y = d.y - quad.point.y,
+									l = Math.sqrt(x * x + y * y),
+									r = d.radius + quad.point.radius + (d.cluster === quad.point.cluster ? padding : clusterPadding);
+							if (l < r) {
+								l = (l - r) / l * alpha;
+								d.x -= x *= l;
+								d.y -= y *= l;
+								quad.point.x += x;
+								quad.point.y += y;
+							}
+						}
+						return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+					});
+				};
+			}
+		});
+	</script>
+</body>
+</html>

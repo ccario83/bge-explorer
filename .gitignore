@@ -1,0 +1,7 @@
+.DS_Store
+data/*
+original/*
+!data/web
+*.pyc
+*~
+~*

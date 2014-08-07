@@ -2,6 +2,8 @@
 data/*
 original/*
 !data/web
+data/web/d3_cluster_data.json
+data/web/d3_network_data.json
 *.pyc
 *~
 ~*

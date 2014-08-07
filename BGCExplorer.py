@@ -168,7 +168,7 @@ class BGCs():
 	verbose      = None
 	# A handle to the actual DB filter (which is a BGCQuery object, as defined above)
 	db           = None
-	# A structure of the network after clustering
+	# A structure of the network after clustering ('nodes' and 'edges' are in a format liked by d3)
 	network      = None  # {'nodes': [{ 'name' => bgc_id, 'attribs' => bgc }], 'edges': [{ 'source' => node idx, 'target' => node idx, 'value': edge_weight }], 'mapping': {bgc_id => node_idx} }
 	# A structure of the clusters after clustering
 	clusters     = None  # {'nodes': [{ 'cluster' => group_idx, 'attribs' => bgc, 'radius' => 10}], 'groups': [[{bgc_id => bgc}]], 'mapping': [{bgc_id => group_idx}] }
@@ -201,15 +201,6 @@ class BGCs():
 		self.clusters  = {'nodes': [], 'groups': [], 'mapping': {}}
 		if verbose: print "Found %d nodes" % len(bgc_ids)
 		
-		# Iterate over each bgc and create a network node {name=>id, attrib=>attribs} and network/cluster mapping {id_ => idx}
-		idx = 0
-		for id_, attribs in bgcs.iteritems():
-			# Append the node and its attributes the the network graph
-			self.network['nodes'].append({'name': id_, 'attribs': attribs})
-			# Create a mapping for bgc id => idx
-			self.network['mapping'][id_] = idx
-			self.clusters['mapping'][id_] = None
-			idx += 1
 		
 		# Get and filter edges
 		# --------------------------
@@ -228,11 +219,17 @@ class BGCs():
 			# At this point, edges looks like this: (bgc1,bgc2) => edge weight
 
 
+		# Initialize the mappings from bgc id to what cluster/network number they are in (to None)
+		for id_ in bgcs.keys():
+			#self.network['mapping'][id_] = None
+			self.clusters['mapping'][id_] = None
+
 		# Iterate over bgc pairs and create edges between them if one exists
-		# For all found edges, also build networks and clusters
+		# For all found edges, also build networks and clusters. 
 		if verbose: print "Building network and clusters"
-		cur_net_no = -1
-		bgc_pairs = self._pairwise(bgc_ids, self_compare=False)
+		cur_clust_no = -1
+		cur_node_no   = 0
+		bgc_pairs    = self._pairwise(bgc_ids, self_compare=False)
 		for b1, b2 in bgc_pairs:
 			# b1 always has the smaller ID in the edge object
 			b1, b2 = sorted([b1, b2])
@@ -241,17 +238,32 @@ class BGCs():
 			try:
 				edge = edges[(b1,b2)]
 			except:
+				pass
+
+			if (edge == None and keep_singletons) or edge != None:
+				# Append the nodes and their attributes to the network graph, if needed 
+				for id_ in [b1,b2]:
+					try:
+						self.network['mapping'][id_]
+					except KeyError:
+						self.network['nodes'].append({'name': id_, 'attribs': bgcs[id_]})
+						self.network['mapping'][id_] = cur_node_no
+						cur_node_no += 1
+
+			if edge == None:
 				continue
+
 			# Add the edge to the network, using source/target indexes instead of IDs (as required by D3). 'value' is the edge weight
 			self.network['edges'].append({'source': self.network['mapping'][b1], 'target': self.network['mapping'][b2], 'value': edge})
+
 			# Determine cluster assignment. 'mapping' is a dictionary of node id => cluster number
 			# If neither bgc belongs to a cluster (both none), then 
 			if self.clusters['mapping'][b1] == None and self.clusters['mapping'][b2] == None:
 				# this is a new cluster
-				cur_net_no += 1
+				cur_clust_no += 1
 				# and both ids should map to this cluster number
-				self.clusters['mapping'][b1] = cur_net_no
-				self.clusters['mapping'][b2] = cur_net_no
+				self.clusters['mapping'][b1] = cur_clust_no
+				self.clusters['mapping'][b2] = cur_clust_no
 				# also add both bgcs {bgc_id => attribs} to 'groups' (a convenience object)
 				self.clusters['groups'].append({b1: bgcs[b1], b2: bgcs[b2]})
 				# One of the nodes (or both) are in a known cluster
@@ -284,9 +296,10 @@ class BGCs():
 		if keep_singletons:
 			for node, cluster in self.clusters['mapping'].iteritems():
 					if cluster == None:
-						cur_net_no += 1
-						self.clusters['mapping'][node] = cur_net_no
+						cur_clust_no += 1
+						self.clusters['mapping'][node] = cur_clust_no
 						self.clusters['groups'].append({node: bgcs[node]})
+		# Or remove network nodes with no edges
 		elif verbose:
 			print "Discarded %d singleton nodes from cluster visualization" % len([n for n,c in self.clusters['mapping'].iteritems() if c==None])
 
@@ -1022,6 +1035,28 @@ class BGCs():
 			if annotation:
 				line += "{sep}{}{sep}{}{sep}{}{sep}{}".format(bgc1['cluster_id'], bgc2['cluster_id'], bgc1['_species'], bgc2['_species'], sep=sep)
 			location.write(line+"\n")
+
+
+	def write_clusters(self, outfile=None, sep="\t", header=True, verbose=None):
+		''' Generates a tab-delimited (default, or use sep="delimiter") annotated output file for the clustered BGCs
+		'''
+		verbose = verbose if verbose != None else self.verbose
+		if outfile == None:
+			print "Please specifiy an output location with outfile=\"path/to/file\""
+			return
+
+		with open(outfile,'w') as out:
+			if header:
+				out.write("{}{s}{}{s}{}{s}{}{s}{}{s}{}{s}{}{s}{}{s}".format("Cluster Group", "Domain",          "Phylum",        "Class",        "Order",              "Family",        "Genus",      "Species", s=sep))
+				out.write("{}{s}{}{s}{}{s}{}{s}{}{s}{}{s}{}{s}{}{s}".format("BGC Kind",      "BGC Start Locus", "BGC End Locus", "Clusterer ID", "BGC ID",             "Organism ID",   "Taxon ID",   "IMG Genome ID", s=sep))
+				out.write("{}{s}{}{s}{}{s}{}{s}{}{s}{}\n".format(           "Genome Size",   "Gene Count",      "Genome Name",   "Genome Key",   "Sequencing Center",  "Status", s=sep))
+			for cluster in self.clusters['nodes']:
+				cluster_no = cluster['cluster']
+				attribs    = cluster['attribs']
+				out.write("{}{s}{}{s}{}{s}{}{s}{}{s}{}{s}{}{s}{}{s}".format(cluster_no, attribs['_domain'], attribs['_phylum'], attribs['_class'], attribs['_order'], attribs['_family'], attribs['_genus'], attribs['_species'], s=sep))
+				out.write("{}{s}{}{s}{}{s}{}{s}{}{s}{}{s}{}{s}{}{s}".format(attribs['kind'], attribs['start_locus_tag'], attribs['end_locus_tag'], attribs['cluster_id'], attribs['bgc_id'], attribs['organism'], attribs['taxon_id'], attribs['img_genome_id'], s=sep))
+				out.write("{}{s}{}{s}{}{s}{}{s}{}{s}{}\n".format(           attribs['genome_size'], attribs['gene_count'], attribs['genome_name'], attribs['genome_name_key'], attribs['sequencing_center'], attribs['status'], s=sep))
+		print "Done"
 
 	# Some handy little functions
 	def _pairwise(self, _list, self_compare=True):

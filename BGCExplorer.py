@@ -197,8 +197,8 @@ class BGCs():
 		if measure not in ['similarity', 'jaccard', 'dds']:
 			print "Please use similarity, jaccard, or dds as measures"
 			return
-		if cutoff>1 || cutoff<0:
-			print "Please use a cutoff between 0 and 1"
+		if cutoff<0:
+			print "Please use a cutoff greater than 0"
 			return
 		if type(use_mcl) != type(True):
 			print "Please use True or False for the use_mcl parameter"
@@ -228,9 +228,12 @@ class BGCs():
 		# Get all pairwise similarity scores for these ids (edges)
 		if use_mcl and not prefilter:
 			cutoff = 0.0
-		if verbose: print "Getting edges with weight <= %.2f" % cutoff
+		if verbose: print "Getting edges with weight > %.2f" % cutoff
 		edges = self.get_bgc_edges(measure, cutoff, verbose=False)
 		if verbose: print "Found %d edges" % len(edges)
+		if len(edges) == 0:
+			print "Warning: No edges found. Please relax cutoffs and check filters"
+			return 
 		# Use mcl to trim edges if requested
 		if use_mcl:
 			if verbose: print "Pruning edges with MCL using I = %.2f" % I
@@ -338,7 +341,7 @@ class BGCs():
 			annotation: The initial annotation column to use to color nodes when the page is launched
 		'''
 		if self.network['nodes']==[]:
-			print "There are no nodes remaining after clustering to visualize. Please relax your cutoffs and check filters"
+			print "There are no nodes remaining after clustering to visualize. Please relax cutoffs and check filters"
 			return
 		verbose = verbose if verbose != None else self.verbose
 		# Copy the network and add a 'group' key to each node corresponding to the attribute to group (color) by

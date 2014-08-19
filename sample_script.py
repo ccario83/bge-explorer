@@ -9,6 +9,9 @@ BACSAC = BGCs(filters={'Kind':"saccharide", 'Genus':"Bacteroides"})
 #NRPS.visualize_clusters()             # Show the clustering results as a bubble plot in a web browser
 #	-- or --
 #NRPS.visualize_network()              # Show the clustering results as a network in a web browser
-BACSAC.cluster(cutoff=.6)
-BACSAC.visualize_network()
-BACSAC.write_clusters()
+
+for c in map(lambda k: k/10., range(4,8)):
+	BACSAC.cluster(cutoff=c)
+	# Note, using visualize_clusters() in a loop will not work because datafiles are overwritten each iteration
+	BACSAC.visualize_network()
+	BACSAC.write_clusters(outfile="/Users/michaelfischbach/Desktop/Bacteroides_saccharide_c%.2f.tsv"%c)

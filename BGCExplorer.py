@@ -193,6 +193,27 @@ class BGCs():
 		       keep_singletons:  Whether clusters of n=1 are kept for the visualization
 		       verbose:          Display clustering information to the screen?
 		'''
+		# Check inputs
+		if measure not in ['similarity', 'jaccard', 'dds']:
+			print "Please use similarity, jaccard, or dds as measures"
+			return
+		if cutoff>1 || cutoff<0:
+			print "Please use a cutoff between 0 and 1"
+			return
+		if type(use_mcl) != type(True):
+			print "Please use True or False for the use_mcl parameter"
+			return
+		if I < 0:
+			print "Please use a positive I value for mcl"
+			return
+		if type(prefilter) != type(True):
+			print "Please use True or False for the prefilter parameter"
+			return
+		if type(keep_singletons) != type(True):
+			print "Please use True or False for the keep_singletons parameter"
+			return
+		# Test verbose for True/False?? Eh,... no.
+
 		verbose = verbose if verbose != None else self.verbose
 		# Get all bgcs using the filters and define variables used to start building the json (for webpage viz) object
 		bgcs           = self.db.get_bgcs(as_dict=True)
@@ -316,6 +337,9 @@ class BGCs():
 
 			annotation: The initial annotation column to use to color nodes when the page is launched
 		'''
+		if self.network['nodes']==[]:
+			print "There are no nodes remaining after clustering to visualize. Please relax your cutoffs and check filters"
+			return
 		verbose = verbose if verbose != None else self.verbose
 		# Copy the network and add a 'group' key to each node corresponding to the attribute to group (color) by
 		data = self.network.copy()
@@ -344,6 +368,9 @@ class BGCs():
 			color_key:      A BGC gene attribute (gene table column names) to color arrows by, or 'pfam' to use a in-order-list of PFAM ids as a color key
 			group_nodes:    Show all nodes in a clustered group as one bubble, with radius proportional to the number of members of that cluster
 		'''
+		if self.clusters['nodes']==[]:
+			print "There are no nodes remaining after clustering to visualize. Please relax cutoffs and check filters"
+			return
 		verbose = verbose if verbose != None else self.verbose
 		# Make the arrows
 		if verbose: print "Generating arrows (this can take a few seconds)"
